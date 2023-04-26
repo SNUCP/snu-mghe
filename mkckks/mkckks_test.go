@@ -93,8 +93,8 @@ var (
 
 func TestCKKS(t *testing.T) {
 
-	defaultParams := []ckks.ParametersLiteral{PN15QP880}
-	//defaultParams := []ckks.ParametersLiteral{PN14QP439}
+	//defaultParams := []ckks.ParametersLiteral{PN15QP880}
+	defaultParams := []ckks.ParametersLiteral{PN14QP439}
 
 	for _, defaultParam := range defaultParams {
 		ckksParams, err := ckks.NewParametersFromLiteral(defaultParam)

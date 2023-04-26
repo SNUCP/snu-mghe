@@ -265,26 +265,49 @@ func (ks *KeySwitcher) PrevMulAndRelinHoisted(op0, op1 *Ciphertext, rlkSet *Reli
 
 			b := rlkSet.Value[id1].Value[0]
 			d := rlkSet.Value[id0].Value[1]
+			v := rlkSet.Value[id0].Value[2]
+			u := params.CRS[-1]
 
 			ks.Decompose(level, ks.polyQPool[2], ks.swkPool3)
+
 			ks.ExternalProductHoisted(level, ks.swkPool3, d, ks.polyQPool[0])
 			ringQ.AddLvl(level, ks.polyQPool[0], ctOut.Value[id1], ctOut.Value[id1])
 
 			ks.ExternalProductHoisted(level, ks.swkPool3, b, ks.polyQPool[0])
-			ringQ.AddLvl(level, ks.polyQPool[0], ks.polyQPool[3], ks.polyQPool[3])
+			ks.Decompose(level, ks.polyQPool[0], ks.swkPool3)
+
+			ks.ExternalProductHoisted(level, ks.swkPool3, v, ks.polyQPool[0])
+			ringQ.AddLvl(level, ks.polyQPool[0], ctOut.Value["0"], ctOut.Value["0"])
+
+			ks.ExternalProductHoisted(level, ks.swkPool3, u, ks.polyQPool[0])
+			ringQ.AddLvl(level, ks.polyQPool[0], ctOut.Value[id0], ctOut.Value[id0])
+
 		}
-
-		v := rlkSet.Value[id0].Value[2]
-		u := params.CRS[-1]
-
-		ks.Decompose(level, ks.polyQPool[3], ks.swkPool3)
-
-		ks.ExternalProductHoisted(level, ks.swkPool3, v, ks.polyQPool[0])
-		ringQ.AddLvl(level, ks.polyQPool[0], ctOut.Value["0"], ctOut.Value["0"])
-
-		ks.ExternalProductHoisted(level, ks.swkPool3, u, ks.polyQPool[0])
-		ringQ.AddLvl(level, ks.polyQPool[0], ctOut.Value[id0], ctOut.Value[id0])
 	}
+	/*
+				b := rlkSet.Value[id1].Value[0]
+				d := rlkSet.Value[id0].Value[1]
+
+				ks.Decompose(level, ks.polyQPool[2], ks.swkPool3)
+				ks.ExternalProductHoisted(level, ks.swkPool3, d, ks.polyQPool[0])
+				ringQ.AddLvl(level, ks.polyQPool[0], ctOut.Value[id1], ctOut.Value[id1])
+
+				ks.ExternalProductHoisted(level, ks.swkPool3, b, ks.polyQPool[0])
+				ringQ.AddLvl(level, ks.polyQPool[0], ks.polyQPool[3], ks.polyQPool[3])
+			}
+
+			v := rlkSet.Value[id0].Value[2]
+			u := params.CRS[-1]
+
+			ks.Decompose(level, ks.polyQPool[3], ks.swkPool3)
+
+			ks.ExternalProductHoisted(level, ks.swkPool3, v, ks.polyQPool[0])
+			ringQ.AddLvl(level, ks.polyQPool[0], ctOut.Value["0"], ctOut.Value["0"])
+
+			ks.ExternalProductHoisted(level, ks.swkPool3, u, ks.polyQPool[0])
+			ringQ.AddLvl(level, ks.polyQPool[0], ctOut.Value[id0], ctOut.Value[id0])
+		}
+	*/
 
 }
 
