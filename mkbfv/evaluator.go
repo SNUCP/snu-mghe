@@ -108,7 +108,7 @@ func (eval *Evaluator) PrevMulRelinNew(ct0, ct1 *Ciphertext, rlkSet *mkrlwe.Reli
 		eval.conv.Rescale(ct1.Value[id], ct1R.Value[id])
 	}
 
-	eval.ksw.PrevMulAndRelinBFV(ct0R, ct1R, rlkSet, ctOut.Ciphertext)
+	eval.ksw.PrevMulAndRelinBFVHoisted(ct0R, ct1R, rlkSet, ctOut.Ciphertext)
 
 	return
 }

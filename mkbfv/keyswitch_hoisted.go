@@ -3,7 +3,7 @@ package mkbfv
 import "mk-lattigo/mkrlwe"
 import "github.com/ldsec/lattigo/v2/ring"
 
-//output is in InvNTTForm
+// output is in InvNTTForm
 func (ks *KeySwitcher) ExternalProductBFVHoisted(levelQ int, aHoisted1, aHoisted2, bg1, bg2 *mkrlwe.SwitchingKey, c *ring.Poly) {
 	params := ks.params
 	ringQ := params.RingQ()
@@ -204,4 +204,123 @@ func (ks *KeySwitcher) MulAndRelinBFVHoisted(op0, op1 *mkrlwe.Ciphertext,
 		ks.ExternalProductHoisted(level, ks.swkPool3, u, ks.polyQPool2)
 		ringQ.AddLvl(level, ctOut.Value[id], ks.polyQPool2, ctOut.Value[id])
 	}
+}
+
+func (ks *KeySwitcher) PrevMulAndRelinBFVHoisted(op0, op1 *mkrlwe.Ciphertext, rlkSet *mkrlwe.RelinearizationKeySet, ctOut *mkrlwe.Ciphertext) {
+	level := ctOut.Level()
+
+	if op0.Level() < level {
+		panic("Cannot MulAndRelin: op0 and op1 have different levels")
+	}
+
+	if ctOut.Level() < level {
+		panic("Cannot MulAndRelin: op0 and ctOut have different levels")
+	}
+
+	idset0 := op0.IDSet()
+	idset1 := op1.IDSet()
+
+	params := ks.params
+	conv := ks.conv
+	ringQ := params.RingQ()
+	ringR := params.RingR()
+
+	//ctOut_0 <- op0_0 * op1_0
+	ringR.NTT(op0.Value["0"], ks.polyRPool1)
+	ringR.NTT(op1.Value["0"], ks.polyRPool2)
+
+	ringR.MForm(ks.polyRPool1, ks.polyRPool1)
+	ringR.MulCoeffsMontgomery(ks.polyRPool1, ks.polyRPool2, ks.polyRPool3)
+	conv.Quantize(ks.polyRPool3, ctOut.Value["0"], params.T())
+
+	//ctOut_j <- op0_0 * op1_j + op0_j * op1_0
+	ringR.MForm(ks.polyRPool2, ks.polyRPool2)
+
+	for id := range idset0.Value {
+		if !idset1.Has(id) {
+			ringR.NTT(op0.Value[id], ks.polyRPool3)
+			ringR.MulCoeffsMontgomery(ks.polyRPool2, ks.polyRPool3, ks.polyRPool3)
+			conv.Quantize(ks.polyRPool3, ctOut.Value[id], params.T())
+		}
+	}
+
+	for id := range idset1.Value {
+		if !idset0.Has(id) {
+			ringR.NTT(op1.Value[id], ks.polyRPool3)
+			ringR.MulCoeffsMontgomery(ks.polyRPool1, ks.polyRPool3, ks.polyRPool3)
+			conv.Quantize(ks.polyRPool3, ctOut.Value[id], params.T())
+		} else {
+			ringR.NTT(op1.Value[id], ks.polyRPool3)
+			ringR.MulCoeffsMontgomery(ks.polyRPool1, ks.polyRPool3, ks.polyRPool3)
+
+			ringR.NTT(op0.Value[id], ks.polyRPool4)
+			ringR.MulCoeffsMontgomeryAndAdd(ks.polyRPool2, ks.polyRPool4, ks.polyRPool3)
+
+			conv.Quantize(ks.polyRPool3, ctOut.Value[id], params.T())
+		}
+	}
+
+	// c_i,j : pool[2]
+	// x_i: pool[3]
+	for id0 := range idset0.Value { // id: j
+		ks.polyQPool2.Zero()
+		for id1 := range idset1.Value { // id1: i
+			if id0 > id1 {
+				if idset1.Has(id0) {
+					continue
+				}
+
+				ringR.NTT(op0.Value[id0], ks.polyRPool1) //pool[0]: op0_i
+				ringR.NTT(op1.Value[id1], ks.polyRPool2) //pool[1]: op1_j
+				ringR.MForm(ks.polyRPool1, ks.polyRPool1)
+				ringR.MulCoeffsMontgomery(ks.polyRPool1, ks.polyRPool2, ks.polyRPool3) //pool[2]: op0_i * op1_j
+
+				conv.Quantize(ks.polyRPool3, ks.polyQPool1, params.T())
+
+			} else if id0 < id1 {
+				ringR.NTT(op0.Value[id0], ks.polyRPool1) //pool[0]: op0_i
+				ringR.NTT(op1.Value[id1], ks.polyRPool2) //pool[1]: op1_j
+				ringR.MForm(ks.polyRPool1, ks.polyRPool1)
+				ringR.MulCoeffsMontgomery(ks.polyRPool1, ks.polyRPool2, ks.polyRPool3) //pool[2]: op0_i * op1_j
+
+				if idset1.Has(id0) {
+					ringR.NTT(op0.Value[id1], ks.polyRPool1) //pool[0]: op0_i
+					ringR.NTT(op1.Value[id0], ks.polyRPool2) //pool[1]: op1_j
+					ringR.MForm(ks.polyRPool1, ks.polyRPool1)
+					ringR.MulCoeffsMontgomeryAndAdd(ks.polyRPool1, ks.polyRPool2, ks.polyRPool3) //pool[2]: op0_i * op1_j
+				}
+
+				conv.Quantize(ks.polyRPool3, ks.polyQPool1, params.T())
+
+			} else {
+				ringR.NTT(op0.Value[id0], ks.polyRPool1) //pool[0]: op0_i
+				ringR.NTT(op1.Value[id1], ks.polyRPool2) //pool[1]: op1_j
+				ringR.MForm(ks.polyRPool1, ks.polyRPool1)
+				ringR.MulCoeffsMontgomery(ks.polyRPool1, ks.polyRPool2, ks.polyRPool3) //pool[2]: op0_i * op1_j
+				conv.Quantize(ks.polyRPool3, ks.polyQPool1, params.T())
+			}
+
+			b := rlkSet.Value[id1].Value[0]
+			d := rlkSet.Value[id0].Value[1]
+
+			ks.Decompose(level, ks.polyQPool1, ks.swkPool3)
+			ks.ExternalProductHoisted(level, ks.swkPool3, d, ks.polyQPool1)
+			ringQ.AddLvl(level, ks.polyQPool1, ctOut.Value[id1], ctOut.Value[id1])
+
+			ks.ExternalProductHoisted(level, ks.swkPool3, b, ks.polyQPool1)
+			ringQ.AddLvl(level, ks.polyQPool1, ks.polyQPool2, ks.polyQPool2)
+		}
+
+		v := rlkSet.Value[id0].Value[2]
+		u := params.CRS[-1]
+
+		ks.Decompose(level, ks.polyQPool2, ks.swkPool3)
+
+		ks.ExternalProductHoisted(level, ks.swkPool3, v, ks.polyQPool1)
+		ringQ.AddLvl(level, ks.polyQPool1, ctOut.Value["0"], ctOut.Value["0"])
+
+		ks.ExternalProductHoisted(level, ks.swkPool3, u, ks.polyQPool1)
+		ringQ.AddLvl(level, ks.polyQPool1, ctOut.Value[id0], ctOut.Value[id0])
+	}
+
 }

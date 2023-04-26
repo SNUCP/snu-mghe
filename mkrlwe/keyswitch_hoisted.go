@@ -178,6 +178,116 @@ func (ks *KeySwitcher) MulAndRelinHoisted(op0, op1 *Ciphertext, op0Hoisted, op1H
 	}
 }
 
+func (ks *KeySwitcher) PrevMulAndRelinHoisted(op0, op1 *Ciphertext, rlkSet *RelinearizationKeySet, ctOut *Ciphertext) {
+
+	level := ctOut.Level()
+
+	if op0.Level() < level {
+		panic("Cannot MulAndRelin: op0 and op1 have different levels")
+	}
+
+	if ctOut.Level() < level {
+		panic("Cannot MulAndRelin: op0 and ctOut have different levels")
+	}
+
+	idset0 := op0.IDSet()
+	idset1 := op1.IDSet()
+
+	params := ks.Parameters
+	ringQ := params.RingQ()
+
+	//ctOut_0 <- op0_0 * op1_0
+	ringQ.NTTLvl(level, op0.Value["0"], ks.polyQPool[0]) //pool[0]: op0_0
+	ringQ.NTTLvl(level, op1.Value["0"], ks.polyQPool[1]) //pool[1]: op1_0
+
+	ringQ.MFormLvl(level, ks.polyQPool[0], ks.polyQPool[0])
+	ringQ.MulCoeffsMontgomeryLvl(level, ks.polyQPool[0], ks.polyQPool[1], ctOut.Value["0"])
+	ringQ.MFormLvl(level, ks.polyQPool[1], ks.polyQPool[1])
+
+	//ctOut_j <- op0_0 * op1_j + op0_j * op1_0
+	for id := range idset0.Value { // id: j
+		ringQ.NTTLvl(level, op0.Value[id], ks.polyQPool[2]) //pool[2]: op0_j
+		ringQ.MulCoeffsMontgomeryLvl(level, ks.polyQPool[1], ks.polyQPool[2], ctOut.Value[id])
+	}
+
+	for id := range idset1.Value { //id:j
+		ringQ.NTTLvl(level, op1.Value[id], ks.polyQPool[2]) //pool[2]: op1_j
+		if idset0.Has(id) {
+			ringQ.MulCoeffsMontgomeryAndAddLvl(level, ks.polyQPool[0], ks.polyQPool[2], ctOut.Value[id])
+		} else {
+			ringQ.MulCoeffsMontgomeryLvl(level, ks.polyQPool[0], ks.polyQPool[2], ctOut.Value[id])
+		}
+	}
+
+	for id := range ctOut.Value {
+		ringQ.InvNTTLvl(level, ctOut.Value[id], ctOut.Value[id])
+	}
+
+	// c_i,j : pool[2]
+	// x_i: pool[3]
+	for id0 := range idset0.Value { // id0: i
+		ks.polyQPool[3].Zero()
+		for id1 := range idset1.Value { // id1: j
+			if id0 > id1 {
+				if idset1.Has(id0) {
+					continue
+				} else {
+					ringQ.NTTLvl(level, op0.Value[id0], ks.polyQPool[0]) //pool[0]: op0_i
+					ringQ.NTTLvl(level, op1.Value[id1], ks.polyQPool[1]) //pool[1]: op1_j
+					ringQ.MFormLvl(level, ks.polyQPool[0], ks.polyQPool[0])
+					ringQ.MulCoeffsMontgomeryLvl(level, ks.polyQPool[0], ks.polyQPool[1], ks.polyQPool[2]) //pool[2]: op0_i * op1_j
+
+					ringQ.InvNTTLvl(level, ks.polyQPool[2], ks.polyQPool[2])
+				}
+			} else if id0 < id1 {
+				ringQ.NTTLvl(level, op0.Value[id0], ks.polyQPool[0]) //pool[0]: op0_i
+				ringQ.NTTLvl(level, op1.Value[id1], ks.polyQPool[1]) //pool[1]: op1_j
+				ringQ.MFormLvl(level, ks.polyQPool[0], ks.polyQPool[0])
+				ringQ.MulCoeffsMontgomeryLvl(level, ks.polyQPool[0], ks.polyQPool[1], ks.polyQPool[2]) //pool[2]: op0_i * op1_j
+
+				if idset1.Has(id0) {
+					ringQ.NTTLvl(level, op0.Value[id1], ks.polyQPool[0]) //pool[0]: op0_i
+					ringQ.NTTLvl(level, op1.Value[id0], ks.polyQPool[1]) //pool[1]: op1_j
+					ringQ.MFormLvl(level, ks.polyQPool[0], ks.polyQPool[0])
+					ringQ.MulCoeffsMontgomeryAndAddLvl(level, ks.polyQPool[0], ks.polyQPool[1], ks.polyQPool[2]) //pool[2]: op0_i * op1_j
+				}
+
+				ringQ.InvNTTLvl(level, ks.polyQPool[2], ks.polyQPool[2])
+
+			} else {
+				ringQ.NTTLvl(level, op0.Value[id0], ks.polyQPool[0]) //pool[0]: op0_i
+				ringQ.NTTLvl(level, op1.Value[id1], ks.polyQPool[1]) //pool[1]: op1_j
+				ringQ.MFormLvl(level, ks.polyQPool[0], ks.polyQPool[0])
+				ringQ.MulCoeffsMontgomeryLvl(level, ks.polyQPool[0], ks.polyQPool[1], ks.polyQPool[2]) //pool[2]: op0_i * op1_j
+
+				ringQ.InvNTTLvl(level, ks.polyQPool[2], ks.polyQPool[2])
+			}
+
+			b := rlkSet.Value[id1].Value[0]
+			d := rlkSet.Value[id0].Value[1]
+
+			ks.Decompose(level, ks.polyQPool[2], ks.swkPool3)
+			ks.ExternalProductHoisted(level, ks.swkPool3, d, ks.polyQPool[0])
+			ringQ.AddLvl(level, ks.polyQPool[0], ctOut.Value[id1], ctOut.Value[id1])
+
+			ks.ExternalProductHoisted(level, ks.swkPool3, b, ks.polyQPool[0])
+			ringQ.AddLvl(level, ks.polyQPool[0], ks.polyQPool[3], ks.polyQPool[3])
+		}
+
+		v := rlkSet.Value[id0].Value[2]
+		u := params.CRS[-1]
+
+		ks.Decompose(level, ks.polyQPool[3], ks.swkPool3)
+
+		ks.ExternalProductHoisted(level, ks.swkPool3, v, ks.polyQPool[0])
+		ringQ.AddLvl(level, ks.polyQPool[0], ctOut.Value["0"], ctOut.Value["0"])
+
+		ks.ExternalProductHoisted(level, ks.swkPool3, u, ks.polyQPool[0])
+		ringQ.AddLvl(level, ks.polyQPool[0], ctOut.Value[id0], ctOut.Value[id0])
+	}
+
+}
+
 // Rotate rotates ctIn with ctOut with RotationKeySet and returns the result in ctOut.
 // Input ciphertext should be in InvNTT form
 func (ks *KeySwitcher) RotateHoisted(ctIn *Ciphertext, rotidx int, ctInHoisted *HoistedCiphertext, rkSet *RotationKeySet, ctOut *Ciphertext) {

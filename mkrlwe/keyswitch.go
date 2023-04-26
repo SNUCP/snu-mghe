@@ -9,7 +9,7 @@ type KeySwitcher struct {
 	rlwe.KeySwitcher
 	Parameters
 	Decomposer *Decomposer
-	polyQPool  [3]*ring.Poly
+	polyQPool  [4]*ring.Poly
 	swkPool1   *SwitchingKey
 	swkPool2   *SwitchingKey
 	swkPool3   *SwitchingKey
@@ -37,7 +37,7 @@ func NewKeySwitcher(params Parameters) *KeySwitcher {
 	ks.Decomposer = NewDecomposer(params.RingQ(), params.RingP(), params.Gamma())
 
 	ringQ := params.RingQ()
-	ks.polyQPool = [3]*ring.Poly{ringQ.NewPoly(), ringQ.NewPoly(), ringQ.NewPoly()}
+	ks.polyQPool = [4]*ring.Poly{ringQ.NewPoly(), ringQ.NewPoly(), ringQ.NewPoly(), ringQ.NewPoly()}
 
 	ks.swkPool1 = NewSwitchingKey(params)
 	ks.swkPool2 = NewSwitchingKey(params)

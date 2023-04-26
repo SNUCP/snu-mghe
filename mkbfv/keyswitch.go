@@ -60,23 +60,24 @@ func (ks *KeySwitcher) DecomposeBFV(levelQ int, aR *ring.Poly, ad1, ad2 *mkrlwe.
 	beta := params.Beta(levelQ)
 	alpha := params.Alpha()
 
+	for i := 0; i < beta; i++ {
+		for j := 0; j < levelQ+1; j++ {
+			ks.swkRPPool.Value[i].Q.Coeffs[j] = ad1.Value[i].Q.Coeffs[j]
+			ks.swkRPPool.Value[i+beta].Q.Coeffs[j] = ad2.Value[i].Q.Coeffs[j]
+		}
+
+		for j := 0; j < levelP+1; j++ {
+			ks.swkRPPool.Value[i].P.Coeffs[j] = ad1.Value[i].P.Coeffs[j]
+			ks.swkRPPool.Value[i+beta].P.Coeffs[j] = ad2.Value[i].P.Coeffs[j]
+		}
+	}
+
 	// Key switching with CRT decomposition for the Qi
 	for i := 0; i < 2*beta; i++ {
 		ks.kswRP.DecomposeSingleNTT(levelQ, levelP, alpha, i, params.Gamma(),
 			aR, ks.swkRPPool.Value[i].Q, ks.swkRPPool.Value[i].P)
 	}
 
-	for i := 0; i < beta; i++ {
-		for j := 0; j < levelQ+1; j++ {
-			copy(ad1.Value[i].Q.Coeffs[j], ks.swkRPPool.Value[i].Q.Coeffs[j])
-			copy(ad2.Value[i].Q.Coeffs[j], ks.swkRPPool.Value[i+beta].Q.Coeffs[j])
-		}
-
-		for j := 0; j < levelP+1; j++ {
-			copy(ad1.Value[i].P.Coeffs[j], ks.swkRPPool.Value[i].P.Coeffs[j])
-			copy(ad2.Value[i].P.Coeffs[j], ks.swkRPPool.Value[i+beta].P.Coeffs[j])
-		}
-	}
 }
 
 // output is in InvNTTForm

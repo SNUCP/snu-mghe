@@ -420,7 +420,7 @@ func (eval *Evaluator) PrevMulRelinNew(op0, op1 *Ciphertext, rlkSet *mkrlwe.Reli
 	}
 
 	ctOut.Scale = op0.ScalingFactor() * op1.ScalingFactor()
-	eval.ksw.PrevMulAndRelin(op0.Ciphertext, op1.Ciphertext, rlkSet, ctOut.Ciphertext)
+	eval.ksw.PrevMulAndRelinHoisted(op0.Ciphertext, op1.Ciphertext, rlkSet, ctOut.Ciphertext)
 	eval.Rescale(ctOut, eval.params.Scale(), ctOut)
 	return
 }

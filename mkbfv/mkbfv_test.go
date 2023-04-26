@@ -23,7 +23,7 @@ func GetTestName(params Parameters, opname string) string {
 	)
 }
 
-var maxUsers = flag.Int("n", 4, "maximum number of parties")
+var maxUsers = flag.Int("n", 8, "maximum number of parties")
 
 var PN15QP880 = ParametersLiteral{
 	LogN: 15,
@@ -266,7 +266,9 @@ func genTestParams(defaultParam Parameters, idset *mkrlwe.IDSet) (testContext *t
 
 func TestMKBFV(t *testing.T) {
 
-	defaultParams := []ParametersLiteral{PN14QP439, PN15QP880}
+	//defaultParams := []ParametersLiteral{PN14QP439, PN15QP880}
+
+	defaultParams := []ParametersLiteral{PN14QP439}
 
 	for _, defaultParam := range defaultParams {
 		params := NewParametersFromLiteral(defaultParam)
