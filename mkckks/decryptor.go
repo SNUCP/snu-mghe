@@ -1,6 +1,7 @@
 package mkckks
 
 import "github.com/ldsec/lattigo/v2/ckks"
+import "github.com/ldsec/lattigo/v2/ring"
 import "mk-lattigo/mkrlwe"
 
 type Decryptor struct {
@@ -40,4 +41,20 @@ func (dec *Decryptor) Decrypt(ciphertext *Ciphertext, skSet *mkrlwe.SecretKeySet
 	msg.Value = dec.encoder.Decode(dec.ptxtPool, dec.params.logSlots)
 
 	return
+}
+
+// Decrypt decrypts the ciphertext with given secretkey set and write the result in ptOut.
+// The level of the output plaintext is min(ciphertext.Level(), plaintext.Level())
+// Output domain will match plaintext.Value.IsNTT value.
+func (dec *Decryptor) DecryptToPtxt(ciphertext *Ciphertext, skSet *mkrlwe.SecretKeySet) *ring.Poly {
+	ctTmp := ciphertext.CopyNew()
+
+	idset := ctTmp.IDSet()
+	for _, sk := range skSet.Value {
+		if idset.Has(sk.ID) {
+			dec.PartialDecrypt(ctTmp, sk)
+		}
+	}
+
+	return ctTmp.Value["0"]
 }

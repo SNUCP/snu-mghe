@@ -421,7 +421,7 @@ func (eval *Evaluator) PrevMulRelinNew(op0, op1 *Ciphertext, rlkSet *mkrlwe.Reli
 
 	ctOut.Scale = op0.ScalingFactor() * op1.ScalingFactor()
 	eval.ksw.PrevMulAndRelinHoisted(op0.Ciphertext, op1.Ciphertext, rlkSet, ctOut.Ciphertext)
-	eval.Rescale(ctOut, eval.params.Scale(), ctOut)
+	//eval.Rescale(ctOut, eval.params.Scale(), ctOut)
 	return
 }
 
@@ -592,7 +592,7 @@ func (eval *Evaluator) mulRelinHoisted(op0, op1 *Ciphertext, op0Hoisted, op1Hois
 
 	ctOut.Scale = op0.ScalingFactor() * op1.ScalingFactor()
 	eval.ksw.MulAndRelinHoisted(op0.Ciphertext, op1.Ciphertext, op0Hoisted, op1Hoisted, rlkSet, ctOut.Ciphertext)
-	eval.Rescale(ctOut, eval.params.Scale(), ctOut)
+	//eval.Rescale(ctOut, eval.params.Scale(), ctOut)
 }
 
 // RotateNew rotates the columns of ct0 by k positions to the left, and returns the result in a newly created element.

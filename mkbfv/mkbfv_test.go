@@ -11,7 +11,6 @@ import "fmt"
 import "testing"
 import "strconv"
 import "math/big"
-import "math/bits"
 import "flag"
 
 func GetTestName(params Parameters, opname string) string {
@@ -67,7 +66,12 @@ var PN15QP880 = ParametersLiteral{
 	},
 
 	P: []uint64{
-		// 2 x 60
+		// 30, 45, 60 x 2
+
+		//0x3ffc0001, 0x3fde0001,
+
+		//0x1fffffc20001, 0x1fffff980001,
+
 		0xffffffffffc0001, 0xfffffffff840001,
 	},
 	T:     65537,
@@ -78,30 +82,26 @@ var PN14QP439 = ParametersLiteral{
 	LogN: 14,
 
 	Q: []uint64{
-		// 5 x 53 + 1 x 54
-		0x1fffffffe30001,
-		0x1fffffffd10001,
-		0x1fffffffbf0001,
-		0x1fffffffb60001,
-		0x1fffffff920001,
-
-		0x3fffffffd60001,
+		// 6 x 53
+		0x200000000e0001, 0x20000000140001,
+		0x200000007c0001, 0x20000000820001,
+		0x20000001360001, 0x20000001460001,
 	},
 
 	QMul: []uint64{
-		// 5 x 53 + 1 x 54
-		0x1fffffffd80001,
-		0x1fffffffc50001,
-		0x1fffffffb90001,
-		0x1fffffffa50001,
-		0x1fffffff900001,
-
-		0x3fffffffca0001,
+		// 6 x 53
+		0x20000000280001, 0x20000000640001,
+		0x200000010c0001, 0x20000001180001,
+		0x20000001520001, 0x200000015e0001,
 	},
-
 	P: []uint64{
-		// 2 x 60
-		0xffffffffffc0001, 0xfffffffff840001,
+		// 30, 45, 60 x 2
+
+		0x3ffc0001, 0x3fde0001,
+
+		//0x1fffffc20001, 0x1fffff980001,
+
+		//0xffffffffffc0001, 0xfffffffff840001,
 	},
 	T:     65537,
 	Sigma: rlwe.DefaultSigma,
@@ -111,6 +111,8 @@ type testParams struct {
 	params    Parameters
 	ringQ     *ring.Ring
 	ringP     *ring.Ring
+	ringQMul  *ring.Ring
+	ringR     *ring.Ring
 	prng      utils.PRNG
 	kgen      *KeyGenerator
 	skSet     *mkrlwe.SecretKeySet
@@ -126,44 +128,23 @@ type testParams struct {
 }
 
 // Returns the ceil(log2) of the sum of the absolute value of all the coefficients
-func log2OfInnerSum(level int, ringQ *ring.Ring, poly *ring.Poly) (logSum int) {
+func log2OfInnerSum(level int, ringQ *ring.Ring, poly *ring.Poly) (logSum float64) {
 	sumRNS := make([]uint64, level+1)
-	var sum uint64
-	for i := 0; i < level+1; i++ {
 
-		qi := ringQ.Modulus[i]
-		qiHalf := qi >> 1
-		coeffs := poly.Coeffs[i]
-		sum = 0
+	for j := 0; j < ringQ.N; j++ {
 
-		for j := 0; j < ringQ.N; j++ {
-
-			v := coeffs[j]
-
-			if v >= qiHalf {
-				sum = ring.CRed(sum+qi-v, qi)
-			} else {
-				sum = ring.CRed(sum+v, qi)
-			}
+		for i := 0; i < level+1; i++ {
+			coeffs := poly.Coeffs[i]
+			sumRNS[i] = coeffs[j]
 		}
 
-		sumRNS[i] = sum
-	}
-
-	var smallNorm = true
-	for i := 1; i < level+1; i++ {
-		smallNorm = smallNorm && (sumRNS[0] == sumRNS[i])
-	}
-
-	smallNorm = false
-	if !smallNorm {
 		var qi uint64
 		var crtReconstruction *big.Int
 
 		sumBigInt := ring.NewUint(0)
 		QiB := new(big.Int)
 		tmp := new(big.Int)
-		modulusBigint := ring.NewUint(1)
+		modulusBigint := ring.NewInt(1)
 
 		for i := 0; i < level+1; i++ {
 
@@ -182,10 +163,18 @@ func log2OfInnerSum(level int, ringQ *ring.Ring, poly *ring.Poly) (logSum int) {
 		}
 
 		sumBigInt.Mod(sumBigInt, modulusBigint)
+		sumBigInt.Abs(sumBigInt)
+		logSum1 := sumBigInt.BitLen()
 
-		logSum = sumBigInt.BitLen()
-	} else {
-		logSum = bits.Len64(sumRNS[0])
+		sumBigInt.Sub(sumBigInt, modulusBigint)
+		sumBigInt.Abs(sumBigInt)
+		logSum2 := sumBigInt.BitLen()
+
+		if logSum1 < logSum2 {
+			logSum += float64(logSum1) / float64(ringQ.N)
+		} else {
+			logSum += float64(logSum2) / float64(ringQ.N)
+		}
 	}
 
 	return
@@ -252,6 +241,8 @@ func genTestParams(defaultParam Parameters, idset *mkrlwe.IDSet) (testContext *t
 	}
 
 	testContext.ringQ = defaultParam.RingQ()
+	testContext.ringQMul = defaultParam.RingQMul()
+	testContext.ringR = defaultParam.RingR()
 
 	if testContext.prng, err = utils.NewPRNG(); err != nil {
 		return nil, err
@@ -369,8 +360,9 @@ func testEvaluatorAdd(testContext *testParams, userList []string, t *testing.T) 
 
 		for i := range msgRes.Value {
 			delta := msgRes.Value[i] - msg.Value[i]
-			require.Equal(t, int64(0), delta, fmt.Sprintf("%v vs %v", msgRes.Value[i], msg.Value[i]))
+			require.Equal(t, int64(0), delta, fmt.Sprintf("%v: %v vs %v", i, msgRes.Value[i], msg.Value[i]))
 		}
+
 	})
 
 }
@@ -438,14 +430,33 @@ func testEvaluatorMul(testContext *testParams, userList []string, t *testing.T) 
 		msg.Value[j] *= msg.Value[j]
 	}
 
-	t.Run(GetTestName(testContext.params, "MKBFVMulAndRelin: "+strconv.Itoa(numUsers)+"/ "), func(t *testing.T) {
+	ptxt := testContext.decryptor.DecryptToPtxt(ct, testContext.skSet)
+	ptxt2 := testContext.decryptor.DecryptToPtxt(ct, testContext.skSet)
+	ptxtR := testContext.ringR.NewPoly()
+	ptxt2R := testContext.ringR.NewPoly()
+
+	testContext.evaluator.conv.ModUpQtoR(ptxt, ptxtR)
+	testContext.evaluator.conv.Rescale(ptxt2, ptxt2R)
+
+	testContext.ringR.NTT(ptxtR, ptxtR)
+	testContext.ringR.MForm(ptxtR, ptxtR)
+	testContext.ringR.NTT(ptxt2R, ptxt2R)
+	testContext.ringR.MulCoeffsMontgomery(ptxtR, ptxt2R, ptxtR)
+	testContext.evaluator.conv.Quantize(ptxtR, ptxt, testContext.params.T())
+
+	t.Run(GetTestName(testContext.params, "MKMulAndRelin: "+strconv.Itoa(numUsers)+"/ "), func(t *testing.T) {
 		ctRes := eval.MulRelinNew(ct, ct, rlkSet)
 		msgRes := testContext.decryptor.Decrypt(ctRes, testContext.skSet)
+		ptxtRes := testContext.decryptor.DecryptToPtxt(ctRes, testContext.skSet)
 
+		testContext.ringQ.Sub(ptxtRes, ptxt, ptxtRes)
+
+		require.GreaterOrEqual(t, float64(1), log2OfInnerSum(ptxtRes.Level(), testContext.ringQ, ptxtRes))
 		for i := range msgRes.Value {
 			delta := msgRes.Value[i] - msg.Value[i]
 			require.Equal(t, int64(0), delta, fmt.Sprintf("%v: %v vs %v", i, msgRes.Value[i], msg.Value[i]))
 		}
+
 	})
 
 }
@@ -477,15 +488,33 @@ func testEvaluatorPrevMul(testContext *testParams, userList []string, t *testing
 	for j := range msg.Value {
 		msg.Value[j] *= msg.Value[j]
 	}
+	ptxt := testContext.decryptor.DecryptToPtxt(ct, testContext.skSet)
+	ptxt2 := testContext.decryptor.DecryptToPtxt(ct, testContext.skSet)
+	ptxtR := testContext.ringR.NewPoly()
+	ptxt2R := testContext.ringR.NewPoly()
 
-	t.Run(GetTestName(testContext.params, "MKBFVPrevMulAndRelin: "+strconv.Itoa(numUsers)+"/ "), func(t *testing.T) {
+	testContext.evaluator.conv.ModUpQtoR(ptxt, ptxtR)
+	testContext.evaluator.conv.Rescale(ptxt2, ptxt2R)
+
+	testContext.ringR.NTT(ptxtR, ptxtR)
+	testContext.ringR.MForm(ptxtR, ptxtR)
+	testContext.ringR.NTT(ptxt2R, ptxt2R)
+	testContext.ringR.MulCoeffsMontgomery(ptxtR, ptxt2R, ptxtR)
+	testContext.evaluator.conv.Quantize(ptxtR, ptxt, testContext.params.T())
+
+	t.Run(GetTestName(testContext.params, "MKPrevMulAndRelin: "+strconv.Itoa(numUsers)+"/ "), func(t *testing.T) {
 		ctRes := eval.PrevMulRelinNew(ct, ct, rlkSet)
 		msgRes := testContext.decryptor.Decrypt(ctRes, testContext.skSet)
+		ptxtRes := testContext.decryptor.DecryptToPtxt(ctRes, testContext.skSet)
 
+		testContext.ringQ.Sub(ptxtRes, ptxt, ptxtRes)
+
+		require.GreaterOrEqual(t, float64(1), log2OfInnerSum(ptxtRes.Level(), testContext.ringQ, ptxtRes))
 		for i := range msgRes.Value {
 			delta := msgRes.Value[i] - msg.Value[i]
 			require.Equal(t, int64(0), delta, fmt.Sprintf("%v: %v vs %v", i, msgRes.Value[i], msg.Value[i]))
 		}
+
 	})
 
 }

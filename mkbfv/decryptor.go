@@ -1,6 +1,7 @@
 package mkbfv
 
 import "mk-lattigo/mkrlwe"
+import "github.com/ldsec/lattigo/v2/ring"
 import "github.com/ldsec/lattigo/v2/bfv"
 
 type Decryptor struct {
@@ -35,13 +36,6 @@ func (dec *Decryptor) Decrypt(ciphertext *Ciphertext, skSet *mkrlwe.SecretKeySet
 
 	ctTmp := ciphertext.CopyNew()
 
-	/*
-		for id := range ctTmp.Value {
-			dec.params.RingQ().InvNTT(ctTmp.Value[id], ctTmp.Value[id])
-			ctTmp.Value[id].IsNTT = false
-		}
-	*/
-
 	idset := ctTmp.IDSet()
 	for _, sk := range skSet.Value {
 		if idset.Has(sk.ID) {
@@ -54,4 +48,22 @@ func (dec *Decryptor) Decrypt(ciphertext *Ciphertext, skSet *mkrlwe.SecretKeySet
 	dec.encoder.DecodeInt(dec.ptxtPool, msg.Value)
 
 	return
+}
+
+// Decrypt decrypts the ciphertext with given secretkey set and write the result in ptOut.
+// The level of the output plaintext is min(ciphertext.Level(), plaintext.Level())
+// Output domain will match plaintext.Value.IsNTT value.
+func (dec *Decryptor) DecryptToPtxt(ciphertext *Ciphertext, skSet *mkrlwe.SecretKeySet) *ring.Poly {
+
+	ctTmp := ciphertext.CopyNew()
+
+	idset := ctTmp.IDSet()
+	for _, sk := range skSet.Value {
+		if idset.Has(sk.ID) {
+			dec.PartialDecrypt(ctTmp, sk)
+		}
+	}
+
+	return ctTmp.Value["0"]
+
 }

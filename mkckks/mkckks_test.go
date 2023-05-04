@@ -15,8 +15,62 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"math"
+	"math/big"
 	"math/cmplx"
 )
+
+// Returns the ceil(log2) of the sum of the absolute value of all the coefficients
+func log2OfInnerSum(level int, ringQ *ring.Ring, poly *ring.Poly) (logSum float64) {
+	sumRNS := make([]uint64, level+1)
+
+	for j := 0; j < ringQ.N; j++ {
+
+		for i := 0; i < level+1; i++ {
+			coeffs := poly.Coeffs[i]
+			sumRNS[i] = coeffs[j]
+		}
+
+		var qi uint64
+		var crtReconstruction *big.Int
+
+		sumBigInt := ring.NewUint(0)
+		QiB := new(big.Int)
+		tmp := new(big.Int)
+		modulusBigint := ring.NewInt(1)
+
+		for i := 0; i < level+1; i++ {
+
+			qi = ringQ.Modulus[i]
+			QiB.SetUint64(qi)
+
+			modulusBigint.Mul(modulusBigint, QiB)
+
+			crtReconstruction = new(big.Int)
+			crtReconstruction.Quo(ringQ.ModulusBigint, QiB)
+			tmp.ModInverse(crtReconstruction, QiB)
+			tmp.Mod(tmp, QiB)
+			crtReconstruction.Mul(crtReconstruction, tmp)
+
+			sumBigInt.Add(sumBigInt, tmp.Mul(ring.NewUint(sumRNS[i]), crtReconstruction))
+		}
+
+		sumBigInt.Mod(sumBigInt, modulusBigint)
+		sumBigInt.Abs(sumBigInt)
+		logSum1 := sumBigInt.BitLen()
+
+		sumBigInt.Sub(sumBigInt, modulusBigint)
+		sumBigInt.Abs(sumBigInt)
+		logSum2 := sumBigInt.BitLen()
+
+		if logSum1 < logSum2 {
+			logSum += float64(logSum1) / float64(ringQ.N)
+		} else {
+			logSum += float64(logSum2) / float64(ringQ.N)
+		}
+	}
+
+	return
+}
 
 var maxUsers = flag.Int("n", 8, "maximum number of parties")
 
@@ -51,10 +105,9 @@ var (
 	PN15QP880 = ckks.ParametersLiteral{
 		LogN:     15,
 		LogSlots: 14,
-		//60 + 13x54
+		//55 + 13x54
 		Q: []uint64{
-			0xfffffffff6a0001,
-
+			0x7fffffffba0001,
 			0x3fffffffd60001, 0x3fffffffca0001,
 			0x3fffffff6d0001, 0x3fffffff5d0001,
 			0x3fffffff550001, 0x3fffffff390001,
@@ -64,8 +117,14 @@ var (
 			0x3ffffffed30001,
 		},
 		P: []uint64{
-			//59 x 2
-			0x7ffffffffe70001, 0x7ffffffffe10001,
+
+			// 30, 45, 60 x 2
+
+			//0x3ffc0001, 0x3fde0001,
+
+			//0x1fffffc20001, 0x1fffff980001,
+
+			0xffffffffffc0001, 0xfffffffff840001,
 		},
 		Scale: 1 << 54,
 		Sigma: rlwe.DefaultSigma,
@@ -75,15 +134,19 @@ var (
 		LogN:     14,
 		LogSlots: 13,
 		Q: []uint64{
-			// 59 + 5x52
-			0x7ffffffffe70001,
-
+			// 53 + 5x52
+			0x1fffffffd80001,
 			0xffffffff00001, 0xfffffffe40001,
 			0xfffffffe20001, 0xfffffffbe0001,
 			0xfffffffa60001,
 		},
 		P: []uint64{
-			// 60 x 2
+			// 30, 45, 60 x 2
+
+			//0x3ffc0001, 0x3fde0001,
+
+			//0x1fffffc20001, 0x1fffff980001,
+
 			0xffffffffffc0001, 0xfffffffff840001,
 		},
 		Scale: 1 << 52,
@@ -126,8 +189,8 @@ func TestCKKS(t *testing.T) {
 		for numUsers := 2; numUsers <= *maxUsers; numUsers *= 2 {
 
 			testEvaluatorPrevMul(testContext, userList[:numUsers], t)
-			//testEvaluatorMul(testContext, userList[:numUsers], t)
-			testEvaluatorMulHoisted(testContext, userList[:numUsers], t)
+			testEvaluatorMul(testContext, userList[:numUsers], t)
+			//testEvaluatorMulHoisted(testContext, userList[:numUsers], t)
 
 			//testEvaluatorRot(testContext, userList[:numUsers], t)
 			//testEvaluatorRotHoisted(testContext, userList[:numUsers], t)
@@ -380,15 +443,29 @@ func testEvaluatorMul(testContext *testParams, userList []string, t *testing.T) 
 		msg.Value[j] *= msg.Value[j]
 	}
 
+	ptxt := testContext.decryptor.DecryptToPtxt(ct, testContext.skSet)
+	ptxt2 := testContext.decryptor.DecryptToPtxt(ct, testContext.skSet)
+
+	testContext.ringQ.NTT(ptxt, ptxt)
+	testContext.ringQ.NTT(ptxt2, ptxt2)
+	testContext.ringQ.MForm(ptxt2, ptxt2)
+	testContext.ringQ.MulCoeffsMontgomery(ptxt, ptxt2, ptxt)
+	testContext.ringQ.InvNTT(ptxt, ptxt)
+
 	t.Run(GetTestName(testContext.params, "MKMulAndRelin: "+strconv.Itoa(numUsers)+"/ "), func(t *testing.T) {
 		ctRes := eval.MulRelinNew(ct, ct, rlkSet)
 		msgRes := testContext.decryptor.Decrypt(ctRes, testContext.skSet)
+		ptxtRes := testContext.decryptor.DecryptToPtxt(ctRes, testContext.skSet)
 
+		testContext.ringQ.Sub(ptxtRes, ptxt, ptxtRes)
+
+		require.GreaterOrEqual(t, float64(1), log2OfInnerSum(ptxtRes.Level(), testContext.ringQ, ptxtRes))
 		for i := range msgRes.Value {
 			delta := msgRes.Value[i] - msg.Value[i]
 			require.GreaterOrEqual(t, -math.Log2(params.Scale())+float64(params.LogSlots())+12, math.Log2(math.Abs(real(delta))))
 			require.GreaterOrEqual(t, -math.Log2(params.Scale())+float64(params.LogSlots())+12, math.Log2(math.Abs(imag(delta))))
 		}
+
 	})
 
 }
@@ -424,15 +501,29 @@ func testEvaluatorPrevMul(testContext *testParams, userList []string, t *testing
 		msg.Value[j] *= msg.Value[j]
 	}
 
+	ptxt := testContext.decryptor.DecryptToPtxt(ct, testContext.skSet)
+	ptxt2 := testContext.decryptor.DecryptToPtxt(ct, testContext.skSet)
+
+	testContext.ringQ.NTT(ptxt, ptxt)
+	testContext.ringQ.NTT(ptxt2, ptxt2)
+	testContext.ringQ.MForm(ptxt2, ptxt2)
+	testContext.ringQ.MulCoeffsMontgomery(ptxt, ptxt2, ptxt)
+	testContext.ringQ.InvNTT(ptxt, ptxt)
+
 	t.Run(GetTestName(testContext.params, "MKPrevMulAndRelin: "+strconv.Itoa(numUsers)+"/ "), func(t *testing.T) {
 		ctRes := eval.PrevMulRelinNew(ct, ct, rlkSet)
 		msgRes := testContext.decryptor.Decrypt(ctRes, testContext.skSet)
+		ptxtRes := testContext.decryptor.DecryptToPtxt(ctRes, testContext.skSet)
 
+		testContext.ringQ.Sub(ptxtRes, ptxt, ptxtRes)
+
+		require.GreaterOrEqual(t, float64(1), log2OfInnerSum(ptxtRes.Level(), testContext.ringQ, ptxtRes))
 		for i := range msgRes.Value {
 			delta := msgRes.Value[i] - msg.Value[i]
 			require.GreaterOrEqual(t, -math.Log2(params.Scale())+float64(params.LogSlots())+12, math.Log2(math.Abs(real(delta))))
 			require.GreaterOrEqual(t, -math.Log2(params.Scale())+float64(params.LogSlots())+12, math.Log2(math.Abs(imag(delta))))
 		}
+
 	})
 
 }
@@ -616,10 +707,15 @@ func testEvaluatorMulHoisted(testContext *testParams, userList []string, t *test
 		ctRes := eval.MulRelinHoistedNew(ct, ct, ctHoisted, nil, rlkSet)
 		msgRes := testContext.decryptor.Decrypt(ctRes, testContext.skSet)
 
+		ctRes2 := testContext.encryptor.EncryptMsgNewScale(msg, testContext.pkSet.GetPublicKey(userList[0]), ctRes.Scale)
+		ctRes2 = eval.SubNew(ctRes2, ctRes)
+		ptxtRes := testContext.decryptor.DecryptToPtxt(ctRes2, testContext.skSet)
+
 		for i := range msgRes.Value {
 			delta := msgRes.Value[i] - msg.Value[i]
 			require.GreaterOrEqual(t, -math.Log2(params.Scale())+float64(params.LogSlots())+12, math.Log2(math.Abs(real(delta))))
 			require.GreaterOrEqual(t, -math.Log2(params.Scale())+float64(params.LogSlots())+12, math.Log2(math.Abs(imag(delta))))
+			require.GreaterOrEqual(t, float64(20), log2OfInnerSum(ctRes2.Level(), testContext.ringQ, ptxtRes))
 		}
 	})
 

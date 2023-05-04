@@ -62,3 +62,18 @@ func (enc *Encryptor) EncodeMsgNew(msg *Message) (ptxtOut *ckks.Plaintext) {
 	enc.encoder.Encode(ptxtOut, msg.Value, enc.params.LogSlots())
 	return
 }
+
+func (enc *Encryptor) EncryptMsgNewScale(msg *Message, pk *mkrlwe.PublicKey, scale float64) (ctOut *Ciphertext) {
+	idset := mkrlwe.NewIDSet()
+	idset.Add(pk.ID)
+	ctOut = NewCiphertext(enc.params, idset, enc.params.MaxLevel(), scale)
+	enc.EncryptMsg(msg, pk, ctOut)
+
+	return
+}
+
+func (enc *Encryptor) EncodeMsgNewScale(msg *Message, scale float64) (ptxtOut *ckks.Plaintext) {
+	ptxtOut = ckks.NewPlaintext(enc.ckksParams, enc.params.MaxLevel(), scale)
+	enc.encoder.Encode(ptxtOut, msg.Value, enc.params.LogSlots())
+	return
+}
