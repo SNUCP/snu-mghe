@@ -120,11 +120,11 @@ var (
 
 			// 30, 45, 60 x 2
 
-			//0x3ffc0001, 0x3fde0001,
+			0x3ffc0001, 0x3fde0001,
 
 			//0x1fffffc20001, 0x1fffff980001,
 
-			0xffffffffffc0001, 0xfffffffff840001,
+			//0xffffffffffc0001, 0xfffffffff840001,
 		},
 		Scale: 1 << 54,
 		Sigma: rlwe.DefaultSigma,
@@ -424,8 +424,8 @@ func testEvaluatorMul(testContext *testParams, userList []string, t *testing.T) 
 
 	for i := range userList {
 		msgList[i], ctList[i] = newTestVectors(testContext, userList[i],
-			complex(0.1/float64(numUsers), 1.0/float64(numUsers)),
-			complex(0.1/float64(numUsers), 1.0/float64(numUsers)))
+			complex(0.5/float64(numUsers), 1.0/float64(numUsers)),
+			complex(0.5/float64(numUsers), 1.0/float64(numUsers)))
 	}
 
 	ct := ctList[0]
@@ -451,6 +451,8 @@ func testEvaluatorMul(testContext *testParams, userList []string, t *testing.T) 
 	testContext.ringQ.MForm(ptxt2, ptxt2)
 	testContext.ringQ.MulCoeffsMontgomery(ptxt, ptxt2, ptxt)
 	testContext.ringQ.InvNTT(ptxt, ptxt)
+	testContext.ringQ.DivRoundByLastModulusLvl(ptxt.Level(), ptxt, ptxt)
+	ptxt.Coeffs = ptxt.Coeffs[:ptxt.Level()]
 
 	t.Run(GetTestName(testContext.params, "MKMulAndRelin: "+strconv.Itoa(numUsers)+"/ "), func(t *testing.T) {
 		ctRes := eval.MulRelinNew(ct, ct, rlkSet)
@@ -482,8 +484,8 @@ func testEvaluatorPrevMul(testContext *testParams, userList []string, t *testing
 
 	for i := range userList {
 		msgList[i], ctList[i] = newTestVectors(testContext, userList[i],
-			complex(0.1/float64(numUsers), 1.0/float64(numUsers)),
-			complex(0.1/float64(numUsers), 1.0/float64(numUsers)))
+			complex(0.5/float64(numUsers), 1.0/float64(numUsers)),
+			complex(0.5/float64(numUsers), 1.0/float64(numUsers)))
 	}
 
 	ct := ctList[0]
@@ -509,6 +511,8 @@ func testEvaluatorPrevMul(testContext *testParams, userList []string, t *testing
 	testContext.ringQ.MForm(ptxt2, ptxt2)
 	testContext.ringQ.MulCoeffsMontgomery(ptxt, ptxt2, ptxt)
 	testContext.ringQ.InvNTT(ptxt, ptxt)
+	testContext.ringQ.DivRoundByLastModulusLvl(ptxt.Level(), ptxt, ptxt)
+	ptxt.Coeffs = ptxt.Coeffs[:ptxt.Level()]
 
 	t.Run(GetTestName(testContext.params, "MKPrevMulAndRelin: "+strconv.Itoa(numUsers)+"/ "), func(t *testing.T) {
 		ctRes := eval.PrevMulRelinNew(ct, ct, rlkSet)
