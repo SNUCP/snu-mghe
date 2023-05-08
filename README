@@ -1,5 +1,7 @@
-This repository provides an implementation of the Multi-key Homomorphic Encryption scheme in (https://eprint.iacr.org/2022/347).
-This project was supported by Samsung Research, Samsung Electronics Co., Ltd.
+This repository provides an implementation of the Multi-Key Homomorphic Encryption scheme in (https://eprint.iacr.org/2022/347) 
+This repository provides an implementation of the Multi-Group Homomorphic Encryption scheme in (https://eprint.iacr.org/2021/1412)
+This library is built upon (https://github.com/SNUCP/MKHE-KKLSS) and Lattigo v2.3.0(https://github.com/tuneinsight/lattigo/tree/v2.3.0)
+
 
 LICENSE
 ===============
