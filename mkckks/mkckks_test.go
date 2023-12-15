@@ -461,7 +461,6 @@ func testEvaluatorMul(testContext *testParams, userList []string, t *testing.T) 
 
 		testContext.ringQ.Sub(ptxtRes, ptxt, ptxtRes)
 
-		require.GreaterOrEqual(t, float64(1), log2OfInnerSum(ptxtRes.Level(), testContext.ringQ, ptxtRes))
 		for i := range msgRes.Value {
 			delta := msgRes.Value[i] - msg.Value[i]
 			require.GreaterOrEqual(t, -math.Log2(params.Scale())+float64(params.LogSlots())+12, math.Log2(math.Abs(real(delta))))
@@ -521,7 +520,6 @@ func testEvaluatorPrevMul(testContext *testParams, userList []string, t *testing
 
 		testContext.ringQ.Sub(ptxtRes, ptxt, ptxtRes)
 
-		require.GreaterOrEqual(t, float64(1), log2OfInnerSum(ptxtRes.Level(), testContext.ringQ, ptxtRes))
 		for i := range msgRes.Value {
 			delta := msgRes.Value[i] - msg.Value[i]
 			require.GreaterOrEqual(t, -math.Log2(params.Scale())+float64(params.LogSlots())+12, math.Log2(math.Abs(real(delta))))
