@@ -24,12 +24,12 @@ func BenchmarkMKCKKS(b *testing.B) {
 		}
 
 		params := NewParameters(ckksParams)
-		userList := make([]string, *maxUsers)
+		groupList := make([]string, *maxGroups)
 		idset := mkrlwe.NewIDSet()
 
-		for i := range userList {
-			userList[i] = "user" + strconv.Itoa(i)
-			idset.Add(userList[i])
+		for i := range groupList {
+			groupList[i] = "group" + strconv.Itoa(i)
+			idset.Add(groupList[i])
 		}
 
 		var testContext *testParams
@@ -37,9 +37,9 @@ func BenchmarkMKCKKS(b *testing.B) {
 			panic(err)
 		}
 
-		for numUsers := 2; numUsers <= *maxUsers; numUsers *= 2 {
-			benchMulAndRelin(testContext, userList[:numUsers], b)
-			benchPrevMulAndRelin(testContext, userList[:numUsers], b)
+		for numGroups := 2; numGroups <= *maxGroups; numGroups *= 2 {
+			benchMulAndRelin(testContext, groupList[:numGroups], b)
+			benchPrevMulAndRelin(testContext, groupList[:numGroups], b)
 			//benchMulAndRelinHoisted(testContext, userList[:numUsers], b)
 			//benchSquareHoisted(testContext, userList[:numUsers], b)
 		}

@@ -72,7 +72,7 @@ func log2OfInnerSum(level int, ringQ *ring.Ring, poly *ring.Poly) (logSum float6
 	return
 }
 
-var maxUsers = flag.Int("n", 8, "maximum number of parties")
+var maxGroups = flag.Int("n", 8, "maximum number of groups")
 
 func GetTestName(params Parameters, opname string) string {
 	return fmt.Sprintf("%slogN=%d/LogSlots=%d/logQP=%d/levels=%d/",
@@ -171,28 +171,29 @@ func TestCKKS(t *testing.T) {
 		}
 
 		params := NewParameters(ckksParams)
-		userList := make([]string, *maxUsers)
+		groupList := make([]string, *maxGroups)
 		idset := mkrlwe.NewIDSet()
 
-		for i := range userList {
-			userList[i] = "user" + strconv.Itoa(i)
-			idset.Add(userList[i])
+		for i := range groupList {
+			groupList[i] = "group" + strconv.Itoa(i)
+			idset.Add(groupList[i])
 		}
 
+		//generate  evaluation keys for each group
 		var testContext *testParams
 		if testContext, err = genTestParams(params, idset); err != nil {
 			panic(err)
 		}
 
-		testEncAndDec(testContext, userList, t)
+		testEncAndDec(testContext, groupList, t)
 
-		for numUsers := 2; numUsers <= *maxUsers; numUsers *= 2 {
+		for numGroups := 2; numGroups <= *maxGroups; numGroups *= 2 {
 
-			testEvaluatorPrevMul(testContext, userList[:numUsers], t)
-			testEvaluatorMul(testContext, userList[:numUsers], t)
+			testEvaluatorPrevMul(testContext, groupList[:numGroups], t)
+			testEvaluatorMul(testContext, groupList[:numGroups], t)
 			//testEvaluatorMulHoisted(testContext, userList[:numUsers], t)
 
-			//testEvaluatorRot(testContext, userList[:numUsers], t)
+			testEvaluatorRot(testContext, groupList[:numGroups], t)
 			//testEvaluatorRotHoisted(testContext, userList[:numUsers], t)
 
 			//testEvaluatorConj(testContext, userList[:numUsers], t)
@@ -202,7 +203,7 @@ func TestCKKS(t *testing.T) {
 	}
 }
 
-func genTestParams(defaultParam Parameters, idset *mkrlwe.IDSet) (testContext *testParams, err error) {
+func genTestParams(defaultParam Parameters, groupIdSet *mkrlwe.IDSet) (testContext *testParams, err error) {
 
 	testContext = new(testParams)
 
@@ -217,11 +218,11 @@ func genTestParams(defaultParam Parameters, idset *mkrlwe.IDSet) (testContext *t
 	testContext.cjkSet = mkrlwe.NewConjugationKeySet()
 
 	// gen group sk, pk, rlk, rk
-	// each group consists of 2 parties
 
-	numParties := 4
+	// number of parties in each group
+	numParties := 8
 
-	for id := range idset.Value {
+	for groupId := range groupIdSet.Value {
 
 		sk := make([]*mkrlwe.SecretKey, numParties)
 		pk := make([]*mkrlwe.PublicKey, numParties)
@@ -230,7 +231,7 @@ func genTestParams(defaultParam Parameters, idset *mkrlwe.IDSet) (testContext *t
 		rtks := make([]map[uint]*mkrlwe.RotationKey, numParties)
 
 		for p := 0; p < numParties; p++ {
-			sk[p], pk[p] = testContext.kgen.GenKeyPair(id)
+			sk[p], pk[p] = testContext.kgen.GenKeyPair(groupId)
 			rlk[p] = testContext.kgen.GenRelinearizationKey(sk[p])
 			cjk[p] = testContext.kgen.GenConjugationKey(sk[p])
 			rtks[p] = testContext.kgen.GenDefaultRotationKeys(sk[p])
