@@ -9,6 +9,7 @@ Attribution-NonCommercial 2.0 Generic (CC BY-NC 2.0)
 
 HOW TO INSTALL
 ==============
+(use "go mod tidy")
 use "go mod vendor" 
 
 
